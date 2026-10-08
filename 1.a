@@ -1,0 +1,145 @@
+const express = require('express');
+const app = express();
+const PORT = 3000;
+
+// ==========================================
+// PART (c): MIDDLEWARE IMPLEMENTATION
+// ==========================================
+
+// 1. Built-in JSON parsing middleware (Required for reading req.body)
+app.use(express.json());
+
+// 2. Global Logger Middleware
+function logger(req, res, next) {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+}
+
+// 3. Global Request Timing Middleware
+function timer(req, res, next) {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`Request completed in ${duration} ms`);
+  });
+  next();
+}
+
+// Register global middlewares (Must be registered BEFORE routes)
+app.use(logger);
+app.use(timer);
+
+// 4. Route-Specific Middleware (API Key Authentication Example)
+function checkApiKey(req, res, next) {
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey === '12345') {
+    next();
+  } else {
+    res.status(401).json({ error: 'Unauthorized: Invalid or missing API key' });
+  }
+}
+
+// ==========================================
+// PART (a): ROUTES, PARAMETERS & REDIRECTS
+// ==========================================
+
+// Basic Route (/)
+app.get('/', (req, res) => {
+  res.send('Welcome to the Express.js Routing & Middleware Demo!');
+});
+
+// Route Parameters (/user/:id)
+app.get('/user/:id', (req, res) => {
+  const userId = req.params.id;
+  res.send(`User ID: ${userId}`);
+});
+
+// Query Parameters (/search?q=express&limit=5)
+app.get('/search', (req, res) => {
+  const query = req.query.q || 'none';
+  const limit = req.query.limit || 'unlimited';
+  res.send(`Searching for '${query}', limit ${limit}`);
+});
+
+// Demonstration of req.originalUrl and res.redirect
+app.get('/old-route', (req, res) => {
+  console.log(`Original requested URL: ${req.originalUrl}`);
+  res.redirect('/new-route');
+});
+
+app.get('/new-route', (req, res) => {
+  res.send('You have been redirected to the new route!');
+});
+
+// ==========================================
+// PART (b): IN-MEMORY RESOURCE CRUD OPERATIONS
+// ==========================================
+
+// In-memory data store with initial sample data
+let books = [
+  { id: 1, title: 'The Hobbit', author: 'Tolkien' },
+  { id: 2, title: 'Dune', author: 'Herbert' }
+];
+let nextBookId = 3;
+
+// GET /books - Retrieve all books
+app.get('/books', (req, res) => {
+  res.json(books);
+});
+
+// GET /books/:id - Retrieve a specific book by ID
+app.get('/books/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const book = books.find(b => b.id === id);
+
+  if (!book) {
+    return res.status(404).json({ error: 'Book not found' });
+  }
+
+  res.json(book);
+});
+
+// POST /books - Add a new book (Demonstrates route-specific middleware)
+app.post('/books', checkApiKey, (req, res) => {
+  const { title, author } = req.body;
+
+  if (!title || !author) {
+    return res.status(400).json({ error: 'Title and author are required' });
+  }
+
+  const newBook = {
+    id: nextBookId++,
+    title,
+    author
+  };
+
+  books.push(newBook);
+  res.status(201).json(newBook);
+});
+
+// DELETE /books/:id - Delete a book by ID
+app.delete('/books/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const bookIndex = books.findIndex(b => b.id === id);
+
+  if (bookIndex === -1) {
+    return res.status(404).json({ error: 'Book not found' });
+  }
+
+  books.splice(bookIndex, 1);
+  res.status(204).send();
+});
+
+// ==========================================
+// 404 HANDLER & SERVER INITIALIZATION
+// ==========================================
+
+// Fallback 404 handler for undefined routes
+app.use((req, res) => {
+  res.status(404).send('Route Not Found');
+});
+
+// Start listening
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
